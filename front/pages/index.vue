@@ -17,10 +17,10 @@ export default {
   },
   async created() {
     const web3 = new Web3(this.endpoint);
-    const abi = ABI.abi;
-    const nftContract = new web3.eth.Contract(abi, this.contractAddress);
+    // const abi = ABI.abi;
+    // const nftContract = new web3.eth.Contract(abi, this.contractAddress);
     this.web3 = web3;
-    this.nftContract = nftContract;
+    // this.nftContract = nftContract;
     try {
       const newAccounts = await ethereum.request({
         method: "eth_requestAccounts",
