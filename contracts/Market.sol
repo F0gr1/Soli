@@ -17,10 +17,21 @@ contract Market {
         require(!stopped);
         _;
     }
-    
+     // Circuit Breakerを発動，停止する関数
+    function toggleCircuit(bool _stopped) public onlyOwner {
+        stopped = _stopped;
+    }
+
+    // コントラクトの呼び出しがアカウント情報登録済みユーザーか確認
+    modifier onlyUser {
+        require(accounts[msg.sender].resistered);
+        _;
+    }
+
+
     struct account {
-        string name;          // 名前
-        string email;         // emailアドレス
+        string  name;          // 名前
+        string  email;         // emailアドレス
         bool resistered;      // アカウント未登録:false, 登録済み:true
         int numSell;          // 出品した商品の数
         int numBuy;           // 購入した商品の数
@@ -37,7 +48,7 @@ contract Market {
     mapping(uint => bool) public refundFlags; // 返金すると，falseからtrueに変わる
 
     // アカウント情報を登録する関数
-    function registerAccount(string _name, string _email) public isStopped {
+    function registerAccount(string memory _name, string memory _email) public isStopped {
         require(!accounts[msg.sender].resistered); // 未登録のethアドレスか確認
 
         accounts[msg.sender].name = _name;   // 名前
@@ -46,7 +57,7 @@ contract Market {
     }
 
     // アカウント情報を修正する関数
-    function modifyAccount(string _name, string _email) public onlyUser isStopped {
+    function modifyAccount(string memory _name, string memory _email) public onlyUser isStopped {
         accounts[msg.sender].name = _name;   // 名前
         accounts[msg.sender].email = _email; // emailアドレス
     }
