@@ -1,5 +1,23 @@
 <template>
   <v-container>
+   <v-row>
+      <v-col cols="12">
+        <v-card>
+          <v-list-item>
+            <v-list-item-title> NFT作成 </v-list-item-title>
+          </v-list-item>
+          <v-list-item>
+            <v-text-field v-model="uri" label="URI"></v-text-field>
+          </v-list-item>
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn rounded color="primary" large @click="createNft()">
+              作成
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-col>
+    </v-row>
   </v-container>
 </template>
 
@@ -9,18 +27,19 @@ import ABI from "../abi/Nft.json";
 export default {
   data() {
     return {
+      uri: null,
       web3: null,
       nftContract: null,
       endpoint: 'https://rinkeby.infura.io/v3/7a1c5aa3ad5548869dfb3795a0436054',
-      contractAddress: "Hi",
+      contractAddress: "0x1018C63B97557Adf2B5dba9f3b8B3FF5b9A88f64",
     };
   },
   async created() {
     const web3 = new Web3(this.endpoint);
-    // const abi = ABI.abi;
-    // const nftContract = new web3.eth.Contract(abi, this.contractAddress);
+    const abi = ABI.abi;
+    const nftContract = new web3.eth.Contract(abi, this.contractAddress);
     this.web3 = web3;
-    // this.nftContract = nftContract;
+    this.nftContract = nftContract;
     try {
       const newAccounts = await ethereum.request({
         method: "eth_requestAccounts",
@@ -34,6 +53,24 @@ export default {
     } catch (error) {
       console.error(error);
     }
+  },
+  methods: {
+    async createNft() {
+      const tx = {
+        from: this.web3.eth.defaultAccount,
+        to: this.contractAddress,
+        data: this.nftContract.methods.mint(this.uri).encodeABI(),
+      };
+      try {
+        await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [tx],
+        });
+        alert("NFT作成成功");
+      } catch (error) {
+        alert("NFT作成失敗");
+      }
+    },
   },
 };
 </script>
