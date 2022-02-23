@@ -53,8 +53,25 @@ export default {
     } catch (error) {
       console.error(error);
     }
+     await this.getMyNfts();
   },
   methods: {
+     async getMyNfts() {
+     const myNftCount = await this.nftContract.methods
+      .balanceOf(this.web3.eth.defaultAccount)
+      .call();
+     for (let i = 0; i < myNftCount; i++) {
+      let myNftTokenId = await this.nftContract.methods
+        .tokenOfOwnerByIndex(this.web3.eth.defaultAccount, i)
+        .call();
+      let myNftTokenUri = await this.nftContract.methods
+        .tokenURI(myNftTokenId)
+        .call();
+       console.log("あなたのNFT");
+       console.log("tokenId: " + myNftTokenId);
+       console.log("tokenUri: " + myNftTokenUri);
+     }
+   },
     async createNft() {
       const tx = {
         from: this.web3.eth.defaultAccount,
