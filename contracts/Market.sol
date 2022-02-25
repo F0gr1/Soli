@@ -32,8 +32,8 @@ contract Market {
         string  name;          // 名前
         string  email;         // emailアドレス
         bool resistered;      // アカウント未登録:false, 登録済み:true
-        int numSell;          // 出品した商品の数
-        int numBuy;           // 購入した商品の数
+        uint numSell;          // 出品した商品の数
+        uint numBuy;           // 購入した商品の数
     }
     mapping(address => account) public accounts;
 
@@ -129,5 +129,18 @@ contract Market {
         items[_numItems].stopSell = true;        // 売れたので出品をストップする
         accounts[msg.sender].numBuy++;           // 購入した商品数の更新
         buyItems[msg.sender].push(_numItems);    // 各ユーザーが購入した商品の番号を記録
+    }
+
+    // 自分が出品した商品の番号を配列で取得する関数
+    function itemsByOwner(address _owner) external view returns(uint[] memory) {
+    uint[] memory result = new uint[](accounts[_owner].numSell);
+    uint counter = 0;
+    for (uint i = 0; i < numItems; i++) {
+      if (items[i].sellerAddr == _owner) {
+        result[counter] = i;
+        counter++;
+      }
+    }
+    return result;
     }
 }
