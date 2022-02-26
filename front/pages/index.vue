@@ -18,20 +18,26 @@
         </v-card>
       </v-col>
     </v-row>
+    <NftCard :items='this.myNft'></NftCard>
   </v-container>
 </template>
 
 <script>
 import Web3 from "web3";
 import ABI from "../abi/Nft.json";
+import NftCard from '../components/NftCard.vue';
 export default {
+  components: {
+   NftCard: NftCard,
+ },
   data() {
     return {
       uri: null,
       web3: null,
       nftContract: null,
       endpoint: 'https://rinkeby.infura.io/v3/7a1c5aa3ad5548869dfb3795a0436054',
-      contractAddress: "0x1018C63B97557Adf2B5dba9f3b8B3FF5b9A88f64",
+      contractAddress: "0x8B65D016615D53B7FB9d2095b446220e6BB4bB44",
+      myNft : [],
     };
   },
   async created() {
@@ -70,6 +76,8 @@ export default {
        console.log("あなたのNFT");
        console.log("tokenId: " + myNftTokenId);
        console.log("tokenUri: " + myNftTokenUri);
+       this.myNft.push(myNftTokenUri);
+
      }
    },
     async createNft() {
