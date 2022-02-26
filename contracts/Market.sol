@@ -43,9 +43,6 @@ contract Market {
     // 各ユーザーが購入した商品の番号を記録する配列
     mapping(address => uint[]) public buyItems;
 
-    // 返金する際に参照するフラグ
-    mapping(uint => bool) public refundFlags; // 返金すると，falseからtrueに変わる
-
     // アカウント情報を登録する関数
     function registerAccount(string memory _name, string memory _email) public isStopped {
         require(!accounts[msg.sender].resistered); // 未登録のethアドレスか確認
