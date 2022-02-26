@@ -21,6 +21,7 @@ module.exports = {
     rinkeby: {
       url: "https://rinkeby.infura.io/v3/7a1c5aa3ad5548869dfb3795a0436054",
       accounts: [""],
+
     },
   },
   solidity: "0.8.4",
