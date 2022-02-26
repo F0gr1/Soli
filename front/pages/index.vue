@@ -53,10 +53,10 @@ export default {
     } catch (error) {
       console.error(error);
     }
-    await this.getMyNfts();
+     await this.getMyNfts();
   },
   methods: {
-    async getMyNfts() {
+     async getMyNfts() {
      const myNftCount = await this.nftContract.methods
       .balanceOf(this.web3.eth.defaultAccount)
       .call();
