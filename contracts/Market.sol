@@ -29,11 +29,11 @@ contract Market {
     }
 
     struct account {
-        string  name;          // 名前
-        string  email;         // emailアドレス
-        bool resistered;      // アカウント未登録:false, 登録済み:true
-        uint numSell;          // 出品した商品の数
-        uint numBuy;           // 購入した商品の数
+        string  name;           // 名前
+        address accountAddress; // emailアドレス
+        bool resistered;        // アカウント未登録:false, 登録済み:true
+        uint numSell;           // 出品した商品の数
+        uint numBuy;            // 購入した商品の数
     }
     mapping(address => account) public accounts;
 
@@ -44,18 +44,18 @@ contract Market {
     mapping(address => uint[]) public buyItems;
 
     // アカウント情報を登録する関数
-    function registerAccount(string memory _name, string memory _email) public isStopped {
+    function registerAccount(string memory _name) public isStopped {
         require(!accounts[msg.sender].resistered); // 未登録のethアドレスか確認
 
         accounts[msg.sender].name = _name;   // 名前
-        accounts[msg.sender].email = _email; // emailアドレス
+        accounts[msg.sender].accountAddress = msg.sender; 
         accounts[msg.sender].resistered = true;
     }
 
     // アカウント情報を修正する関数
-    function modifyAccount(string memory _name, string memory _email) public onlyUser isStopped {
+    function modifyAccount(string memory _name) public onlyUser isStopped {
         accounts[msg.sender].name = _name;   // 名前
-        accounts[msg.sender].email = _email; // emailアドレス
+        accounts[msg.sender].accountAddress = msg.sender; // emailアドレス
     }
 
     struct item {
