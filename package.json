@@ -1,24 +1,45 @@
 {
-  "name": "workspace",
+  "name": "soli",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "type": "module",
+  "description": "Permissionless NFT minting and escrow-based fixed-price sales.",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "clean": "hardhat clean",
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "coverage": "c8 --all --exclude=front/** --exclude=types/** --exclude=artifacts/** --exclude=cache/** --exclude=ignition/** --reporter=text npm test",
+    "audit": "npm audit --omit=dev --audit-level=high",
+    "audit:full": "npm audit --audit-level=high",
+    "chain": "hardhat node --hostname 0.0.0.0",
+    "deploy:local": "hardhat ignition deploy ignition/modules/Soli.js --network localhost && hardhat run scripts/export-deployment.js --network localhost",
+    "deploy:sepolia": "hardhat ignition deploy ignition/modules/Soli.js --network sepolia",
+    "export:deployment": "hardhat run scripts/export-deployment.js --network localhost",
+    "frontend:install": "npm --prefix front ci",
+    "frontend:typecheck": "npm --prefix front run typecheck",
+    "frontend:test": "npm --prefix front run test",
+    "frontend:build": "npm --prefix front run build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "engines": {
+    "node": "24.16.0",
+    "npm": ">=11 <12"
+  },
   "devDependencies": {
-    "@nomiclabs/hardhat-ethers": "^2.0.4",
-    "@nomiclabs/hardhat-waffle": "^2.0.2",
-    "chai": "^4.3.6",
-    "ethereum-waffle": "^3.4.0",
-    "ethers": "^5.5.4",
-    "hardhat": "^2.8.4"
+    "@nomicfoundation/hardhat-ignition": "3.1.8",
+    "@nomicfoundation/hardhat-ignition-ethers": "3.1.6",
+    "@nomicfoundation/hardhat-toolbox-mocha-ethers": "3.0.7",
+    "c8": "12.0.0",
+    "chai": "6.2.2",
+    "ethers": "6.17.0",
+    "hardhat": "3.11.1",
+    "mocha": "11.7.6"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "^4.4.2",
-    "web3": "^1.7.0"
+    "@openzeppelin/contracts": "5.6.1"
+  },
+  "overrides": {
+    "adm-zip": "0.6.0",
+    "lodash-es": "4.18.1",
+    "minimist": "1.2.8"
   }
 }

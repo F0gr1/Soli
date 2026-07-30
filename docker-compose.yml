@@ -1,0 +1,60 @@
+services:
+  chain:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: chain
+    ports:
+      - "8545:8545"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:8545',{method:'POST',headers:{'content-type':'application/json'},body:'{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}'}).then(async r=>{const b=await r.json();if(!r.ok||b.result!=='0x7a69')process.exit(1)}).catch(()=>process.exit(1))
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  deploy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: deploy
+    depends_on:
+      chain:
+        condition: service_healthy
+    environment:
+      HARDHAT_LOCALHOST_URL: http://chain:8545
+    volumes:
+      - deployments:/workspace/front/public/deployments
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    depends_on:
+      deploy:
+        condition: service_completed_successfully
+    environment:
+      NUXT_PUBLIC_CHAIN_ID: "31337"
+      NUXT_PUBLIC_RPC_URL: http://127.0.0.1:8545
+      SOLI_DEPLOYMENT_DIR: /app/deployments
+    ports:
+      - "3000:3000"
+    volumes:
+      - deployments:/app/deployments:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health').then(async r=>{if(!r.ok||((await r.json()).status!=='ok'))process.exit(1)}).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  deployments:

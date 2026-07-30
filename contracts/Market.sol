@@ -1,143 +1,174 @@
-//SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
 
-contract Market {
-    address owner;        // コントラクトオーナーのアドレス 
-    uint public numItems; // 商品数
-    bool public stopped;  // trueの場合Circuit Breakerが発動し，全てのコントラクトが使用不可能になる
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
-     // コントラクトの呼び出しがコントラクトのオーナーか確認
-    modifier onlyOwner {
-        require(msg.sender == owner);
-        _;
+contract Market is Ownable2Step, Pausable, ReentrancyGuard, IERC721Receiver {
+    enum ListingStatus {
+        Active,
+        Cancelled,
+        Sold
     }
 
-    // Circuit Breaker
-    modifier isStopped {
-        require(!stopped);
-        _;
-    }
-     // Circuit Breakerを発動，停止する関数
-    function toggleCircuit(bool _stopped) public onlyOwner {
-        stopped = _stopped;
+    struct Listing {
+        address nft;
+        address seller;
+        uint256 tokenId;
+        uint256 price;
+        ListingStatus status;
     }
 
-    // コントラクトの呼び出しがアカウント情報登録済みユーザーか確認
-    modifier onlyUser {
-        require(accounts[msg.sender].resistered);
-        _;
+    uint256 public nextListingId = 1;
+    uint256 public totalPendingProceeds;
+    mapping(uint256 listingId => Listing) public listings;
+    mapping(address seller => uint256) public pendingProceeds;
+
+    uint256 private _pendingListingId;
+    address private _pendingNft;
+    address private _pendingSeller;
+    uint256 private _pendingTokenId;
+
+    error InvalidPrice();
+    error InvalidListing();
+    error NotTokenOwner();
+    error NotERC721();
+    error NFTApprovalRequired();
+    error NotSeller();
+    error IncorrectPayment();
+    error CannotBuyOwnListing();
+    error UnexpectedERC721Transfer();
+    error NoProceeds();
+    error PaymentTransferFailed();
+    error DirectPaymentNotAccepted();
+
+    event Listed(
+        uint256 indexed listingId,
+        address indexed nft,
+        uint256 indexed tokenId,
+        address seller,
+        uint256 price
+    );
+    event ListingCancelled(uint256 indexed listingId, address indexed seller);
+    event Sold(
+        uint256 indexed listingId,
+        address indexed buyer,
+        address indexed seller,
+        uint256 price
+    );
+    event ProceedsWithdrawn(address indexed seller, uint256 amount);
+
+    constructor() Ownable(msg.sender) { }
+
+    function list(address nft, uint256 tokenId, uint256 price)
+        external
+        whenNotPaused
+        nonReentrant
+        returns (uint256 listingId)
+    {
+        if (price == 0) revert InvalidPrice();
+        if (!IERC165(nft).supportsInterface(type(IERC721).interfaceId)) revert NotERC721();
+        if (IERC721(nft).ownerOf(tokenId) != msg.sender) revert NotTokenOwner();
+        if (
+            IERC721(nft).getApproved(tokenId) != address(this) &&
+            !IERC721(nft).isApprovedForAll(msg.sender, address(this))
+        ) revert NFTApprovalRequired();
+
+        listingId = nextListingId++;
+        _pendingListingId = listingId;
+        _pendingNft = nft;
+        _pendingSeller = msg.sender;
+        _pendingTokenId = tokenId;
+
+        IERC721(nft).safeTransferFrom(msg.sender, address(this), tokenId);
+
+        delete _pendingListingId;
+        delete _pendingNft;
+        delete _pendingSeller;
+        delete _pendingTokenId;
+
+        listings[listingId] = Listing({
+            nft: nft,
+            seller: msg.sender,
+            tokenId: tokenId,
+            price: price,
+            status: ListingStatus.Active
+        });
+
+        emit Listed(listingId, nft, tokenId, msg.sender, price);
     }
 
-    struct account {
-        string  name;           // 名前
-        address accountAddress; // emailアドレス
-        bool resistered;        // アカウント未登録:false, 登録済み:true
-        uint numSell;           // 出品した商品の数
-        uint numBuy;            // 購入した商品の数
-    }
-    mapping(address => account) public accounts;
+    function cancelListing(uint256 listingId) external whenNotPaused nonReentrant {
+        Listing storage listing = listings[listingId];
+        if (listing.status != ListingStatus.Active) revert InvalidListing();
+        if (listing.seller != msg.sender) revert NotSeller();
 
-    // 各ユーザーが出品した商品の番号を記録する配列
-    mapping(address => uint[]) public sellItems;
+        listing.status = ListingStatus.Cancelled;
+        IERC721(listing.nft).safeTransferFrom(address(this), listing.seller, listing.tokenId);
 
-    // 各ユーザーが購入した商品の番号を記録する配列
-    mapping(address => uint[]) public buyItems;
-
-    // アカウント情報を登録する関数
-    function registerAccount(string memory _name) public isStopped {
-        require(!accounts[msg.sender].resistered); // 未登録のethアドレスか確認
-
-        accounts[msg.sender].name = _name;   // 名前
-        accounts[msg.sender].accountAddress = msg.sender; 
-        accounts[msg.sender].resistered = true;
+        emit ListingCancelled(listingId, msg.sender);
     }
 
-    // アカウント情報を修正する関数
-    function modifyAccount(string memory _name) public onlyUser isStopped {
-        accounts[msg.sender].name = _name;   // 名前
-        accounts[msg.sender].accountAddress = msg.sender; // emailアドレス
+    function buy(uint256 listingId) external payable whenNotPaused nonReentrant {
+        Listing storage listing = listings[listingId];
+        if (listing.status != ListingStatus.Active) revert InvalidListing();
+        if (msg.sender == listing.seller) revert CannotBuyOwnListing();
+        if (msg.value != listing.price) revert IncorrectPayment();
+
+        listing.status = ListingStatus.Sold;
+        pendingProceeds[listing.seller] += msg.value;
+        totalPendingProceeds += msg.value;
+
+        IERC721(listing.nft).safeTransferFrom(address(this), msg.sender, listing.tokenId);
+
+        emit Sold(listingId, msg.sender, listing.seller, msg.value);
     }
 
-    struct item {
-        address sellerAddr;  // 出品者のethアドレス
-        address buyerAddr;   // 購入者のethアドレス
-        string seller;       // 出品者名
-        string name;         // 商品名
-        string description;  // 商品説明
-        uint price;          // 価格
-        bool payment;        // false:未支払い, true:支払済み
-        bool receivement;    // false:未受取り, true:受取済み
-        bool stopSell;       // false:出品中, true:出品取消し
-    }
-    mapping(uint => item) public items;
+    function withdrawProceeds() external nonReentrant {
+        uint256 amount = pendingProceeds[msg.sender];
+        if (amount == 0) revert NoProceeds();
 
-    // 出品する関数
-    function sell(string calldata _name, string calldata _description, uint _price) public onlyUser isStopped {
-        items[numItems].sellerAddr = msg.sender;            // 出品者のethアドレス
-        items[numItems].seller = accounts[msg.sender].name; // 出品者名
-        items[numItems].name = _name;                       // 商品名
-        items[numItems].description = _description;         // 商品説明
-        items[numItems].price = _price;                     // 商品価格
-        accounts[msg.sender].numSell++;                     // 出品した商品数の更新
-        sellItems[msg.sender].push(numItems);               // 各ユーザーが購入した商品の番号を記録
-        numItems++;
+        pendingProceeds[msg.sender] = 0;
+        totalPendingProceeds -= amount;
+
+        (bool success,) = payable(msg.sender).call{value: amount}("");
+        if (!success) revert PaymentTransferFailed();
+
+        emit ProceedsWithdrawn(msg.sender, amount);
     }
 
-    // 出品内容を変更する関数
-    function modifyItem(uint _numItems, string calldata _name, string calldata _description, uint _price) public onlyUser isStopped {
-        require(items[_numItems].sellerAddr == msg.sender);  // コントラクトの呼び出しが出品者か確認
-        require(!items[_numItems].payment);                  // 購入されていない商品か確認
-        require(!items[_numItems].stopSell);                 // 出品中の商品か確認
-        items[_numItems].seller = accounts[msg.sender].name; // 出品者名
-        items[_numItems].name = _name;                       // 商品名
-        items[_numItems].description = _description;         // 商品説明
-        items[_numItems].price = _price;                     // 商品価格
+    function pause() external onlyOwner {
+        _pause();
     }
 
-    // 出品を取り消す関数（出品者）
-    function sellerStop(uint _numItems) public onlyUser isStopped {
-        require(items[_numItems].sellerAddr == msg.sender); // コントラクトの呼び出しが出品者か確認
-        require(_numItems < numItems);                      // 存在する商品か確認
-        require(!items[_numItems].stopSell);                // 出品中の商品か確認
-        require(!items[_numItems].payment);                 // 購入されていない商品か確認
-
-        items[_numItems].stopSell = true; // 出品の取消し
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
-    // 出品を取り消す関数（オーナー）
-    function ownerStop(uint _numItems) public onlyOwner isStopped {
-        require(items[_numItems].sellerAddr == msg.sender); // コントラクトの呼び出しが出品者か確認
-        require(_numItems < numItems);                      // 存在する商品か確認
-        require(!items[_numItems].stopSell);                // 出品中の商品か確認
-        require(!items[_numItems].payment);                 // 購入されていない商品か確認
+    function onERC721Received(address, address from, uint256 tokenId, bytes calldata)
+        external
+        view
+        returns (bytes4)
+    {
+        if (
+            _pendingListingId == 0 ||
+            msg.sender != _pendingNft ||
+            from != _pendingSeller ||
+            tokenId != _pendingTokenId
+        ) revert UnexpectedERC721Transfer();
 
-        items[_numItems].stopSell = true;
+        return IERC721Receiver.onERC721Received.selector;
     }
 
-    // 購入する関数
-    function buy(uint _numItems) public payable onlyUser isStopped {
-        require(_numItems < numItems);                // 存在する商品か確認
-        require(!items[_numItems].payment);           // 商品が売り切れていないか確認
-        require(!items[_numItems].stopSell);          // 出品取消しになっていないか確認
-        require(items[_numItems].price == msg.value); // 入金金額が商品価格と一致しているか確認
-
-        items[_numItems].buyerAddr = msg.sender; // 購入者のethアドレス
-        items[_numItems].payment = true;         // 支払済みにする
-        items[_numItems].stopSell = true;        // 売れたので出品をストップする
-        accounts[msg.sender].numBuy++;           // 購入した商品数の更新
-        buyItems[msg.sender].push(_numItems);    // 各ユーザーが購入した商品の番号を記録
+    receive() external payable {
+        revert DirectPaymentNotAccepted();
     }
 
-    // 自分が出品した商品の番号を配列で取得する関数
-    function itemsByOwner(address _owner) external view returns(uint[] memory) {
-    uint[] memory result = new uint[](accounts[_owner].numSell);
-    uint counter = 0;
-    for (uint i = 0; i < numItems; i++) {
-      if (items[i].sellerAddr == _owner) {
-        result[counter] = i;
-        counter++;
-      }
-    }
-    return result;
+    fallback() external payable {
+        revert DirectPaymentNotAccepted();
     }
 }

@@ -1,28 +1,41 @@
-require("@nomiclabs/hardhat-waffle");
+import hardhatToolboxMochaEthers from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
 
-// This is a sample Hardhat task. To learn how to create your own go to
-// https://hardhat.org/guides/create-task.html
-task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
-  const accounts = await hre.ethers.getSigners();
+const sepolia =
+  process.env.SEPOLIA_RPC_URL && process.env.SEPOLIA_PRIVATE_KEY
+    ? {
+        type: "http",
+        url: process.env.SEPOLIA_RPC_URL,
+        chainId: 11155111,
+        accounts: [process.env.SEPOLIA_PRIVATE_KEY],
+      }
+    : undefined;
 
-  for (const account of accounts) {
-    console.log(account.address);
-  }
-});
-
-// You need to export an object to set up your config
-// Go to https://hardhat.org/config/ to learn more
-
-/**
- * @type import('hardhat/config').HardhatUserConfig
- */
-module.exports = {
+/** @type import("hardhat/config").HardhatUserConfig */
+export default {
+  plugins: [hardhatToolboxMochaEthers],
   networks: {
-    rinkeby: {
-      url: "https://rinkeby.infura.io/v3/7a1c5aa3ad5548869dfb3795a0436054",
-      accounts: [""],
-
+    hardhat: {
+      type: "edr-simulated",
+      chainId: 31337,
+    },
+    localhost: {
+      type: "http",
+      url: process.env.HARDHAT_LOCALHOST_URL || "http://127.0.0.1:8545",
+      chainId: 31337,
+    },
+    ...(sepolia ? { sepolia } : {}),
+  },
+  solidity: {
+    version: "0.8.28",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+      evmVersion: "cancun",
     },
   },
-  solidity: "0.8.4",
+  mocha: {
+    timeout: 40000,
+  },
 };

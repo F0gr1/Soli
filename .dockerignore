@@ -1,0 +1,12 @@
+.git
+.gitignore
+.serena
+node_modules
+front/node_modules
+front/.nuxt
+front/.output
+coverage
+cache
+artifacts
+ignition/deployments
+front/public/deployments/*.json
