@@ -3,9 +3,12 @@ node_modules
 coverage
 coverage.json
 typechain
+/types
+.ai-worklog/
+.serena/
+front/public/deployments/*.json
 
-#Hardhat files
+# Hardhat files
 cache
 artifacts
-
-hardhat.config.js
+ignition/deployments
